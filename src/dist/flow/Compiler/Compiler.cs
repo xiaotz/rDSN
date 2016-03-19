@@ -117,7 +117,7 @@ namespace rDSN.Tron.Compiler
             SystemHelper.CreateOrCleanDirectory(dir);
 
             libs.Add(Path.Combine(Environment.GetEnvironmentVariable("DSN_ROOT"), "lib", "dsn.dev.csharp.dll"));
-            libs.Add(Path.Combine(Environment.GetEnvironmentVariable("DSN_ROOT"), "bin", "Windows", "Thrift.dll"));
+            libs.Add(Path.Combine(Environment.GetEnvironmentVariable("DSN_ROOT"), "lib", "Thrift.dll"));
             
             string code = codeGenerator.BuildRdsn(serviceObject.GetType(), contexts.Select(c => c.Value).ToArray());
             SystemHelper.StringToFile(code, Path.Combine(dir, name + ".cs"));
@@ -184,7 +184,7 @@ namespace rDSN.Tron.Compiler
         
             if (SystemHelper.RunProcess("php.exe", Path.Combine(Environment.GetEnvironmentVariable("DSN_ROOT"), "bin", "dsn.generate_code.php") + " " + Path.Combine(name, plan.Package.Spec.MainSpecFile) + " csharp " + dir + " binary layer3") == 0)
             {
-                sources.Add(Path.Combine(dir, serviceObject.GetType().Name + ".client.cs"));
+                //sources.Add(Path.Combine(dir, serviceObject.GetType().Name + ".client.cs"));
                 sources.Add(Path.Combine(dir, serviceObject.GetType().Name + ".server.cs"));
                 sources.Add(Path.Combine(dir, "ThriftBinaryHelper.cs"));
                 sources.Add(Path.Combine(dir, serviceObject.GetType().Name + ".main.composed.cs"));
@@ -194,11 +194,13 @@ namespace rDSN.Tron.Compiler
             {
                 Console.Write("php codegen failed");
             }
+            
             //grab thrift-generated files
             foreach (var file in Directory.GetFiles(Path.Combine(dir, "thrift"), "*.cs", SearchOption.AllDirectories))
             {
                 sources.Add(file);
             }
+
             // step: generate composed service package                        
             CSharpCompiler.ToDiskAssembly(sources.ToArray(), libs.ToArray(), new string[] { },
                 Path.Combine(name, name + ".exe"),
@@ -217,7 +219,7 @@ namespace rDSN.Tron.Compiler
                 }
             }
 
-            Console.ReadKey();
+            //Console.ReadKey();
             return plan;
         }
     }

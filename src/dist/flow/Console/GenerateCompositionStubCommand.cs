@@ -90,6 +90,7 @@ namespace rDSN.Tron.ControlPanel
             {
                 return false;
             }
+
             CSharpCompiler.ToDiskAssembly(
                 new string[] { Path.Combine( "tmp" , app_name + ".commonspec.cs" )  },
                 new string[] { "rDSN.Tron.Utility.dll", "rDSN.Tron.Contract.dll" },

@@ -114,11 +114,11 @@ namespace rDSN.Tron.Utility
             if (cr.Errors.Count > 0)
             {
                 // Display compilation errors.
-                Trace.WriteLine("Compiler error:");
-                Trace.WriteLine("Errors building " + cr.PathToAssembly);
+                Console.WriteLine("Compiler error:");
+                Console.WriteLine("Errors building " + cr.PathToAssembly);
                 foreach (CompilerError ce in cr.Errors)
                 {
-                    Trace.WriteLine("\t" + ce.ToString());
+                    Console.WriteLine("\t" + ce.ToString());
                 }
 
                 return null;
@@ -134,6 +134,7 @@ namespace rDSN.Tron.Utility
                     Trace.Assert(stream != null);
                 }
 
+                Console.WriteLine("Generate " + cr.PathToAssembly + " succeeds!");
                 return cr.CompiledAssembly;
             }
         }

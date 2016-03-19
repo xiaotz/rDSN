@@ -87,8 +87,14 @@ namespace rDSN.Tron.LanguageProvider
             {
                 var thriftGenPath = Path.Combine(dir, "thrift");
                 CSharpCompiler.ToDiskAssembly(
-                    new string[] { Path.Combine(dir, "ThriftBinaryHelper.cs"), Path.Combine(dir, app_name + ".client.cs"), Path.Combine(dir, app_name + ".code.definition.cs") }.Concat(Directory.GetFiles(thriftGenPath, "*.cs", SearchOption.AllDirectories)).ToArray(),
-                    new string[] { Path.Combine(Environment.GetEnvironmentVariable("DSN_ROOT"), "lib", "dsn.dev.csharp.dll"), Path.Combine(Environment.GetEnvironmentVariable("DSN_ROOT"), "bin", "Windows", "Thrift.dll") },
+                    new string[] {
+                        Path.Combine(dir, "ThriftBinaryHelper.cs"), 
+                        Path.Combine(dir, app_name + ".client.cs"), 
+                        Path.Combine(dir, app_name + ".code.definition.cs") }.Concat(Directory.GetFiles(thriftGenPath, "*.cs", SearchOption.AllDirectories)).ToArray(),
+                   new string[] { 
+                       Path.Combine(Environment.GetEnvironmentVariable("DSN_ROOT"), "lib", "dsn.dev.csharp.dll"), 
+                       Path.Combine(Environment.GetEnvironmentVariable("DSN_ROOT"), "lib", "Thrift.dll") 
+                   },
                     new string[] { },
                     Path.Combine(dir, app_name + ".client.dll")
                     );

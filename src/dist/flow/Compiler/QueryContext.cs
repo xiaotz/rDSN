@@ -58,7 +58,7 @@ namespace rDSN.Tron.Compiler
             "rDSN.Tron.Utility.dll",
             "rDSN.Tron.Compiler.dll",
             "rDSN.Tron.Contract.dll",
-            "rDSN.Tron.Runtime.Common.dll",
+            "rDSN.Tron.Runtime.dll",
         };
 
         public Dictionary<Type, string> RewrittenTypes = new Dictionary<Type,string>(); // see TypeRewriter

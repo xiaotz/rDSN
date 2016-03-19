@@ -42,6 +42,7 @@ using System.Reflection;
 using System.Diagnostics;
 
 using rDSN.Tron.Utility;
+using rDSN.Tron.Contract;
 
 namespace rDSN.Tron.Contract
 {
@@ -109,7 +110,45 @@ namespace rDSN.Tron.Contract
 
             return builder.ToString();
         }
-        public static string GenerateThriftSpec(Type type, List<string> dependentSpecFiles)
+
+        public class TypeGraph : GenericGraph<TypeVertex, TypeEdge, TypeGraph>
+        { }
+
+        public class TypeVertex : GenericVertex<TypeVertex, TypeEdge, TypeGraph> 
+        {
+            public TypeVertex(TypeGraph g, UInt64 id):
+                base(g, id)
+            {
+            }
+
+            public Type Owner { get; set; }
+        }
+        
+        public class TypeEdge : GenericEdge<TypeVertex, TypeEdge, TypeGraph>
+        {
+            public TypeEdge(TypeGraph graph, TypeVertex startVertex, TypeVertex endVertex)
+                : base(graph, startVertex, endVertex)
+            {}
+        }
+
+        private static bool IsDependentOfPrimitiveTypes(Type type)
+        {
+            if (type.IsSimpleType())
+                return true;
+            else if (type.IsGenericType)
+            {
+                foreach (var p in type.GetGenericArguments())
+                {
+                    if (!IsDependentOfPrimitiveTypes(p))
+                        return false;
+                }
+                return true;
+            }
+            else
+                return false;
+        }
+
+        private static string GetThriftTypeName(Type type)
         {
             var thriftTypeMapping = new Dictionary<Type, string>()
             {
@@ -122,10 +161,142 @@ namespace rDSN.Tron.Contract
                 {typeof(byte[]), "binary"},
                 {typeof(string), "string" }
             };
+
+            if (type.IsSimpleType())
+            {
+                return thriftTypeMapping[type];
+            }
+            else if (type.IsGenericType)
+            {
+                if (type.GetGenericTypeDefinition().Name.Contains("List") ||
+                    type.GetGenericTypeDefinition().Name.Contains("Array"))
+                {
+                    return "list<" + GetThriftTypeName(type.GetGenericArguments()[0]) + ">";
+                }
+                else 
+                {
+                    throw new NotSupportedException();
+                }
+            }
+            else
+            {
+                return type.Name;
+            }
+        }
+
+        public static string GenerateStandAloneThriftSpec(Type type, List<string> dependentSpecFiles)
+        {           
             CodeBuilder builder = new CodeBuilder();
             
             builder.AppendLine();
             builder.AppendLine("namespace csharp " + type.Namespace.ToString());
+            builder.AppendLine();
+
+            var trackedTypes = new HashSet<Type>();
+            var tobetracked = new Queue<Type>();
+            
+            foreach (var m in ServiceContract.GetServiceCalls(type))
+            {
+                var return_value_type = m.ReturnType.GetGenericArguments()[0];
+                var parameter_type = m.GetParameters()[0].ParameterType.GetGenericArguments()[0];
+
+                if (!IsDependentOfPrimitiveTypes(return_value_type) && !trackedTypes.Contains(return_value_type))
+                {
+                    tobetracked.Enqueue(return_value_type);
+                    trackedTypes.Add(return_value_type);
+                }
+
+                if (!IsDependentOfPrimitiveTypes(parameter_type) && !trackedTypes.Contains(parameter_type))
+                {
+                    tobetracked.Enqueue(parameter_type);
+                    trackedTypes.Add(parameter_type);
+                }
+            }
+
+            while (tobetracked.Count > 0)
+            {
+                var t = tobetracked.Dequeue();
+                foreach (var fld in t.GetFields())
+                {
+                    if (!IsDependentOfPrimitiveTypes(fld.FieldType) && !trackedTypes.Contains(fld.FieldType))
+                    {
+                        if (fld.FieldType.IsGenericType)
+                        {
+                            foreach (var p in fld.FieldType.GetGenericArguments())
+                            {
+                                if (!IsDependentOfPrimitiveTypes(p) && !trackedTypes.Contains(p))
+                                {
+                                    tobetracked.Enqueue(p);
+                                    trackedTypes.Add(p);
+                                }
+                            }
+                        }
+                        else
+                        {
+
+                            tobetracked.Enqueue(fld.FieldType);
+                            trackedTypes.Add(fld.FieldType);
+                        }
+                    }
+                }
+            }
+
+            // dump types with dependency order
+            var g = new TypeGraph();
+
+            foreach (var t in trackedTypes)
+            {
+                var v = g.CreateVertex(typeof(TypeVertex), (ulong)t.GetHashCode());
+                v.Owner =  t;
+            }
+
+            foreach (var t in trackedTypes)
+            {
+                var fv = g.Vertices.Where(v => v.Value.Owner == t).First();
+
+                foreach (var fld in t.GetFields())
+                {
+                    if (!IsDependentOfPrimitiveTypes(fld.FieldType))
+                    {
+                        if (fld.FieldType.IsGenericType)
+                        {
+                            foreach (var p in fld.FieldType.GetGenericArguments())
+                            {
+                                if (!IsDependentOfPrimitiveTypes(p))
+                                {
+                                    var tv = g.Vertices.Where(v => v.Value.Owner == p).First();
+
+                                    tv.Value.ConnectTo<TypeEdge>(fv.Value);
+                                }
+                            }
+                        }
+                        else
+                        {
+
+                            var tv = g.Vertices.Where(v => v.Value.Owner == fld.FieldType).First();
+
+                            tv.Value.ConnectTo<TypeEdge>(fv.Value);
+                        }
+                    }
+                }
+            }
+
+            var traversal = new DAGTraverserSatisfied<TypeVertex, TypeEdge, TypeGraph>(true);
+            traversal.Traverse(g, v => {
+                builder.AppendLine("struct " + GetThriftTypeName(v.Owner));
+
+                builder.BeginBlock();
+                int idx = 0;
+                foreach (var fld in v.Owner.GetFields())
+                {
+                    builder.AppendLine(++idx + ":" + GetThriftTypeName(fld.FieldType) + " " + fld.Name + ";");
+                }
+                builder.EndBlock(); 
+
+                builder.AppendLine();
+                return true;
+            }, false, false);
+
             builder.AppendLine("service " + type.Name);
             builder.BeginBlock();
 
@@ -133,9 +304,43 @@ namespace rDSN.Tron.Contract
             {
                 var return_value_type = m.ReturnType.GetGenericArguments()[0];
                 var parameter_type = m.GetParameters()[0].ParameterType.GetGenericArguments()[0];
-                string return_value_name = thriftTypeMapping.ContainsKey(return_value_type) ? thriftTypeMapping[return_value_type] : return_value_type.FullName.GetCompilableTypeName();
-                string parameter_name = thriftTypeMapping.ContainsKey(parameter_type) ? thriftTypeMapping[parameter_type] : parameter_type.FullName.GetCompilableTypeName();
-                builder.AppendLine(return_value_name + " " + m.Name + "(" + parameter_name + " req);");
+                string return_value_name = GetThriftTypeName(return_value_type);
+                string parameter_name = GetThriftTypeName(parameter_type);
+                builder.AppendLine(return_value_name + " " + m.Name + "(1: " + parameter_name + " req);");
+            }
+
+            builder.EndBlock();
+            builder.AppendLine();
+
+            return builder.ToString();
+        }
+
+        public static string GenerateThriftSpec(Type type, List<string> dependentSpecFiles)
+        {
+            CodeBuilder builder = new CodeBuilder();
+
+
+            foreach (var s in dependentSpecFiles)
+            {
+                builder.AppendLine("include \"" + s + "\"");
+            }
+
+            builder.AppendLine();
+            builder.AppendLine("namespace csharp " + type.Namespace.ToString());
+            builder.AppendLine("namespace cpp " + type.Namespace.ToString());
+            builder.AppendLine();
+
+
+            builder.AppendLine("service " + type.Name);
+            builder.BeginBlock();
+
+            foreach (var m in ServiceContract.GetServiceCalls(type))
+            {
+                var return_value_type = m.ReturnType.GetGenericArguments()[0];
+                var parameter_type = m.GetParameters()[0].ParameterType.GetGenericArguments()[0];
+                string return_value_name = GetThriftTypeName(return_value_type);
+                string parameter_name = GetThriftTypeName(parameter_type);
+                builder.AppendLine(return_value_name + " " + m.Name + "(1: " + parameter_name + " req);");
             }
 
             builder.EndBlock();
