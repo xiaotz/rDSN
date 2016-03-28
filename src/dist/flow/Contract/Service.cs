@@ -313,29 +313,4 @@ namespace rDSN.Tron.Contract
 
         private Dictionary<Metric, string> m_properties = new Dictionary<Metric, string>();
     }
-
-    public interface IPartitionableService<TPartitionKey>
-    { 
-    }
-
-    public interface IDynamicPartitionableService<TPartitionKey> : IPartitionableService<TPartitionKey>
-    {
-        UInt64 PartitionKeyHash(TPartitionKey key);
-        void Merge();
-        void Split();
-    }
-
-    public class LearnRequest
-    {}
-
-    public class LearnState
-    {}
-
-    public interface IReplicationableService
-    { 
-        int Checkpoint(bool force);
-        void PrepareLearningRequest(LearnRequest request);
-        void GetLearnState(LearnRequest request, LearnState state);
-        int  ApplyLearnState(LearnState state);
-    }
 }
