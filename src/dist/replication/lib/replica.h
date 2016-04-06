@@ -241,6 +241,7 @@ private:
 
     // perf counters
     perf_counter_               _counter_commit_latency;
+    perf_counter_               _counter_private_log_size;
 };
 
 }} // namespace
